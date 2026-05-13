@@ -489,7 +489,7 @@
     function startHTTPPolling() {
         if (httpPollTimer) clearInterval(httpPollTimer);
         triggerImmediateUpdate();
-        httpPollTimer = setInterval(triggerImmediateUpdate, 10000);
+        httpPollTimer = setInterval(triggerImmediateUpdate, 30000);
     }
 
     // ================= 8. 导入/导出备份 =================
