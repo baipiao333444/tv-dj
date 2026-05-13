@@ -1,0 +1,120 @@
+[
+  {
+    "id": "folder-default",
+    "name": "默认关注",
+    "isOpen": false,
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT",
+      "SUIUSDT",
+      "SEIUSDT",
+      "NEARUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778403051057",
+    "name": "defi",
+    "isOpen": false,
+    "symbols": [
+      "HYPEUSDT",
+      "UNIUSDT",
+      "LINKUSDT",
+      "AAVEUSDT",
+      "AVAXUSDT",
+      "EIGENUSDT",
+      "USUALUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778402874414",
+    "name": "二级",
+    "isOpen": false,
+    "symbols": [
+      "MONUSDT",
+      "STRKUSDT",
+      "ARBUSDT",
+      "OPUSDT",
+      "LINEAUSDT"
+    ]
+  },
+  {
+    "id": "folder-alt",
+    "name": "山寨观察",
+    "isOpen": false,
+    "symbols": [
+      "PENGUUSDT",
+      "VIRTUALUSDT",
+      "ROBOUSDT",
+      "TONUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778382181128",
+    "name": "存储",
+    "isOpen": false,
+    "symbols": [
+      "WALUSDT",
+      "FILUSDT",
+      "ICPUSDT",
+      "TAOUSDT",
+      "ARUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778413330947",
+    "name": "RWA",
+    "isOpen": false,
+    "symbols": [
+      "ONDOUSDT",
+      "PLUMEUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778413753690",
+    "name": "AI",
+    "isOpen": false,
+    "symbols": [
+      "KITEUSDT",
+      "SAHARAUSDT",
+      "AIXBTUSDT",
+      "ACTUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778414149438",
+    "name": "隐私",
+    "isOpen": false,
+    "symbols": [
+      "ZECUSDT",
+      "XMRUSDT",
+      "ZAMAUSDT",
+      "XANUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778416019687",
+    "name": "生命科学",
+    "isOpen": false,
+    "symbols": [
+      "BIOUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778416066982",
+    "name": "慈善",
+    "isOpen": false,
+    "symbols": [
+      "GIGGLEUSDT"
+    ]
+  },
+  {
+    "id": "folder-1778416179442",
+    "name": "模块化",
+    "isOpen": false,
+    "symbols": [
+      "TIAUSDT",
+      "ATOMUSDT"
+    ]
+  }
+]
