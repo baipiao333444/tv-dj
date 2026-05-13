@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jelly Quant - 极简盯盘面板</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+    <style>
+        /* ================= 1. 全局与暗黑主题 ================= */
+        :root {
+            /* 稍微调亮一点点面板底色，增加呼吸感 */
+            --bg-panel: #1e2329;
+            --text-main: #eaecef;
+            --text-muted: #848e9c;
+            --up-color: #089981;
+            --down-color: #FF6B6B;
+
+            --col-icon: 18px;
+            --col-name: 90px;
+            --col-price: 85px;
+            --col-change: 70px;
+            --col-vol: 75px;
+        }
+
+        body {
+            margin: 0; padding: 30px 20px; /* 上下多留点白，别顶着屏幕边缘 */
+
+            /* 【核心美化】：替换纯黑背景，改为高级的“深空蓝灰”大对角渐变 */
+            background: linear-gradient(135deg, #0f141e 0%, #1a1f28 50%, #0d1117 100%);
+            background-attachment: fixed; /* 保证往下滚动时背景固定，产生质感 */
+            min-height: 100vh; /* 确保渐变铺满整个屏幕 */
+            box-sizing: border-box;
+
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            display: flex; justify-content: center; align-items: flex-start; /* 改为偏上对齐，视觉重心更稳 */
+        }
+
+        .app-container {
+            width: 100%; max-width: 600px;
+            background-color: var(--bg-panel);
+            border-radius: 12px; /* 圆角稍微加大一点，削弱锐利感 */
+            padding: 20px; /* 内边距稍微加大，让数据更舒展 */
+
+            /* 【核心美化】：给主面板加一个极细的轮廓光，以及一个微微泛蓝的超级弥散阴影，营造“悬浮感” */
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 60px rgba(41, 98, 255, 0.03);
+
+            scrollbar-gutter: stable;
+        }
+
+        /* 极简滚动条 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2b3139; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #434651; }
+
+        /* ================= 2. 顶部工具栏与搜索 ================= */
+        .toolbar {
+            display: flex; gap: 10px; margin-bottom: 15px; align-items: center; position: relative;
+        }
+        button {
+            background: #2b3139; color: var(--text-main); border: none;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: 0.2s;
+        }
+        button:hover { background: #434651; }
+
+        .search-box { position: relative; flex-grow: 1; }
+        .search-box input {
+            width: 100%; box-sizing: border-box; background: #0b0e11; border: 1px solid #2b3139;
+            color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none;
+        }
+        .search-box input:focus { border-color: #2962ff; }
+        .ac-list {
+            position: absolute; top: 100%; left: 0; right: 0; background: #1e2329; border: 1px solid #2b3139;
+            z-index: 100; border-radius: 4px; display: none; max-height: 300px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .ac-list.show { display: block; }
+        .ac-item {
+            padding: 8px 10px; cursor: pointer; font-size: 13px; display: flex; justify-content: space-between;
+        }
+        .ac-item:hover { background: #2b3139; }
+        .ac-item b { color: #2962ff; }
+
+        /* ================= 3. 数据网格系统 (锁定排版) ================= */
+        .wl-list-header, .wl-symbol-item {
+            display: grid !important;
+            grid-template-columns: var(--col-icon) var(--col-name) var(--col-price) var(--col-change) var(--col-vol) 1fr;
+            gap: 15px; align-items: center; padding: 8px 10px;
+        }
+        .wl-list-header {
+            color: var(--text-muted); font-size: 12px; border-bottom: 1px solid #2b3139; margin-bottom: 5px;
+        }
+        .wl-list-header > div, .wl-symbol-item > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* 拖拽列宽手柄 */
+        .header-resizer { position: relative; user-select: none; }
+        .header-resizer.right-align { text-align: right; }
+        .col-resize-handle {
+            position: absolute; right: -10px; top: -5px; bottom: -5px; width: 20px;
+            cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center;
+        }
+        .col-resize-handle::after {
+            content: ''; width: 2px; height: 12px; background-color: #434651; transition: all 0.2s ease; border-radius: 1px;
+        }
+        .header-resizer:hover .col-resize-handle::after { background-color: #848e9c; height: 80%; }
+        .col-resize-handle:hover::after, .col-resize-handle.is-resizing::after {
+            background-color: #2962ff !important; width: 3px; height: 100%;
+        }
+
+        /* 单元格格式 */
+        .col-icon { display: flex; justify-content: center; }
+        .col-name { font-weight: bold; font-size: 13px; cursor: grab;}
+        .col-price { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500; text-align: right; }
+        .col-change { font-weight: bold; font-size: 13px; text-align: right; }
+        .col-vol { font-size: 12px; color: var(--text-muted); text-align: right; }
+
+        .text-up { color: var(--up-color) !important; }
+        .text-down { color: var(--down-color) !important; }
+
+        /* 闪烁光晕特效 */
+        .flash-up { color: var(--up-color) !important; text-shadow: 0 0 5px rgba(8, 153, 129, 0.4); }
+        .flash-down { color: var(--down-color) !important; text-shadow: 0 0 5px rgba(255, 107, 107, 0.4); }
+
+        /* ================= 4. 文件夹与悬浮交互 ================= */
+        .wl-symbol-item { border-radius: 4px; transition: background 0.1s; position: relative; cursor: default; }
+        .wl-symbol-item:hover { background-color: #2b3139; }
+
+        .tv-folder { margin-bottom: 4px; }
+        .tv-folder summary {
+            padding: 8px 10px; cursor: pointer; font-weight: bold; font-size: 13px; color: var(--text-muted);
+            user-select: none; border-radius: 4px; transition: background 0.2s; position: relative; padding-right: 80px;
+        }
+        .tv-folder summary:hover { background-color: #2b3139; color: var(--text-main); }
+        .tv-folder summary::marker { color: #848e9c; }
+
+        .folder-combo-sum { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 600; }
+
+        /* 垃圾桶遮盖模式 */
+        .wl-symbol-del, .folder-del-btn {
+            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            color: #848e9c; padding: 6px 10px; border-radius: 4px; display: none; z-index: 20; cursor: pointer;
+        }
+        .folder-del-btn { background-color: var(--bg-panel); box-shadow: -8px 0px 8px 0px var(--bg-panel); }
+        .wl-symbol-del { background-color: #2b3139; box-shadow: -8px 0px 8px 0px #2b3139; }
+
+        .wl-symbol-item:hover .wl-symbol-del, .tv-folder summary:hover .folder-del-btn { display: flex; align-items: center; justify-content: center; }
+        .wl-symbol-del:hover, .folder-del-btn:hover { color: var(--down-color) !important; background-color: #3b4149; }
+
+        .sortable-ghost { opacity: 0.3; background: #2962ff33 !important; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <div class="toolbar">
+            <button onclick="addNewFolder()">+ 新建分类</button>
+            <div class="search-box">
+                <input type="text" id="filterInput" placeholder="搜币种添加 (如 BTC)">
+                <div id="filter-ac-list" class="ac-list"></div>
+            </div>
+            <button onclick="exportWatchlist()" title="备份数据">导出</button>
+            <button onclick="importWatchlist()" title="恢复数据">导入</button>
+        </div>
+
+        <div class="wl-list-header">
+            <div class="col-icon"></div>
+            <div class="header-resizer" data-col="name">商品<div class="col-resize-handle"></div></div>
+            <div class="header-resizer right-align" data-col="price">最新价<div class="col-resize-handle"></div></div>
+            <div class="header-resizer right-align" data-col="change">涨跌%<div class="col-resize-handle"></div></div>
+            <div class="header-resizer right-align" data-col="vol">成交额<div class="col-resize-handle"></div></div>
+            <div></div>
+        </div>
+
+        <div id="watchlist-container"></div>
+    </div>
+
+<script>
+    // ================= 核心状态与引擎 =================
+    const WL_STORAGE_KEY = 'jelly_watchlist_data';
+    const COLUMN_WIDTHS_KEY = 'jelly_column_widths';
+
+    let watchlistData = [];
+    let globalTickerDict = {};
+    let trueUtcOpenCache = {};
+    let allSymbolsCache = [];
+    let sortableInstances = [];
+    let httpPollTimer = null;
+
+    // ================= 1. 启动生命周期 =================
+    window.onload = async () => {
+        loadColumnWidths();
+        initColumnResizer();
+        loadWatchlist();
+        bindAutocomplete();
+
+        // 并行拉取 Binance 所有的 U本位合约名称 (前端轻量级操作)
+        fetchSymbolsDict();
+
+        // 自动获取所有币的真实 UTC 0点开盘价
+        syncWatchlistUtcOpens();
+
+        // 开启 10秒轮询
+        startHTTPPolling();
+    };
+
+    // ================= 2. 列宽拖拽引擎 =================
+    function initColumnResizer() {
+        const handles = document.querySelectorAll('.col-resize-handle');
+        let startX, startWidth, targetCol, activeHandle;
+
+        handles.forEach(handle => {
+            handle.addEventListener('mousedown', function(e) {
+                e.stopPropagation();
+                activeHandle = this; activeHandle.classList.add('is-resizing');
+                targetCol = this.parentElement.getAttribute('data-col');
+                startX = e.pageX;
+                startWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--col-${targetCol}`));
+                document.documentElement.style.cursor = 'col-resize';
+
+                function onMouseMove(e) {
+                    const newWidth = Math.max(40, startWidth + (e.pageX - startX));
+                    document.documentElement.style.setProperty(`--col-${targetCol}`, `${newWidth}px`);
+                }
+                function onMouseUp() {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    document.documentElement.style.cursor = 'default';
+                    if (activeHandle) activeHandle.classList.remove('is-resizing');
+                    saveColumnWidths();
+                }
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        });
+    }
+
+    function saveColumnWidths() {
+        const cols = ['name', 'price', 'change', 'vol'];
+        const widths = {};
+        cols.forEach(c => widths[c] = getComputedStyle(document.documentElement).getPropertyValue(`--col-${c}`));
+        localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(widths));
+    }
+
+    function loadColumnWidths() {
+        const saved = localStorage.getItem(COLUMN_WIDTHS_KEY);
+        if (saved) {
+            try {
+                const widths = JSON.parse(saved);
+                Object.keys(widths).forEach(key => document.documentElement.style.setProperty(`--col-${key}`, widths[key]));
+            } catch (e) {}
+        }
+    }
+
+    // ================= 3. 数据层处理 =================
+    function formatVolCN(volStr) {
+        const v = parseFloat(volStr);
+        if (isNaN(v)) return '--';
+        if (v >= 100000000) return (v / 100000000).toFixed(2) + '亿';
+        if (v >= 10000) return (v / 10000).toFixed(2) + '万';
+        return v.toFixed(2);
+    }
+
+    function getCoinLogoHTML(sym) {
+        let baseCoin = sym.replace('USDT', '').replace(/^(1000000|10000|1000)(?=[A-Z]+)/, '');
+        const colors = ['#F5B041', '#5DADE2', '#AF7AC5', '#48C9B0', '#F1948A', '#52BE80', '#85C1E9', '#E59866', '#5D6D7E'];
+        const bgColor = colors[baseCoin.charCodeAt(0) % colors.length];
+        const letter = baseCoin.substring(0, 1);
+        const okxUrl = `https://static.okx.com/cdn/oksupport/asset/currency/icon/${baseCoin.toLowerCase()}.png`;
+        const gateUrl = `https://gimg2.gateimg.com/coin_logos/${baseCoin.toLowerCase()}_logo.png`;
+
+        return `
+        <div style="width: 18px; height: 18px; border-radius: 50%; background-color: ${bgColor}; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #fff; flex-shrink: 0; box-shadow: 0 0 2px rgba(0,0,0,0.5);">
+            ${letter}
+            <img data-src="${okxUrl}" class="async-coin-logo" data-fallback="${gateUrl}" onerror="this.src=this.dataset.fallback" onload="this.style.opacity=1" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; background-color: #ffffff; padding: 0.5px; opacity: 0; transition: opacity 0.4s ease;">
+        </div>`;
+    }
+
+    // ================= 4. 自选列表引擎 =================
+    function loadWatchlist() {
+        const stored = localStorage.getItem(WL_STORAGE_KEY);
+        if (stored) {
+            watchlistData = JSON.parse(stored);
+        } else {
+            watchlistData = [{ id: 'folder-1', name: '默认关注', isOpen: true, symbols: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'] }];
+            saveWatchlistToStorage();
+        }
+        renderWatchlistDOM();
+    }
+
+    function saveWatchlistToStorage() { localStorage.setItem(WL_STORAGE_KEY, JSON.stringify(watchlistData)); }
+
+    function syncDataFromDOM() {
+        const newData = [];
+        document.querySelectorAll('.tv-folder').forEach(folderEl => {
+            const id = folderEl.getAttribute('data-folder-id');
+            const nameEl = folderEl.querySelector('.folder-name-text');
+            const name = nameEl ? nameEl.textContent.trim() : folderEl.querySelector('summary').textContent.trim();
+            const isOpen = folderEl.hasAttribute('open');
+            const symbols = Array.from(folderEl.querySelectorAll('.wl-symbol-item')).map(item => item.getAttribute('data-symbol'));
+            newData.push({ id, name, isOpen, symbols });
+        });
+        watchlistData = newData;
+        saveWatchlistToStorage();
+    }
+
+    function renderWatchlistDOM() {
+        const container = document.getElementById('watchlist-container');
+        container.innerHTML = '';
+        sortableInstances.forEach(s => s.destroy());
+        sortableInstances = [];
+
+        watchlistData.forEach(folder => {
+            const detailsEl = document.createElement('details');
+            detailsEl.className = 'tv-folder'; detailsEl.setAttribute('data-folder-id', folder.id);
+            if (folder.isOpen) detailsEl.setAttribute('open', '');
+            detailsEl.addEventListener('toggle', () => syncDataFromDOM());
+
+            let symbolsHTML = folder.symbols.map(sym => {
+                const snap = globalTickerDict[sym] || { price: '--', change: '--', vol: '--' };
+                const pStr = snap.change !== '--' ? (snap.change > 0 ? '+' : '') + snap.change.toFixed(2) + '%' : '--';
+                const color = snap.change !== '--' ? (snap.change >= 0 ? 'text-up' : 'text-down') : '';
+                return `
+                <div class="wl-symbol-item" data-symbol="${sym}">
+                    <div class="col-icon">${getCoinLogoHTML(sym)}</div>
+                    <div class="col-name wl-name">${sym.replace('USDT', '')}</div>
+                    <div class="col-price live-price-${sym}">${snap.price !== '--' ? snap.price : '--'}</div>
+                    <div class="col-change ${color} live-change-${sym}">${pStr}</div>
+                    <div class="col-vol live-vol-${sym}">${snap.vol !== '--' ? formatVolCN(snap.vol) : '--'}</div>
+                    <div class="wl-symbol-del" onclick="removeSymbolFromWl('${sym}', this); event.stopPropagation();" title="移除">🗑️</div>
+                </div>`;
+            }).join('');
+
+            detailsEl.innerHTML = `
+                <summary>
+                    <span class="folder-name-text">${folder.name}</span>
+                    <span class="folder-combo-sum" id="sum-${folder.id}"></span>
+                    <div class="folder-del-btn" onclick="removeFolder('${folder.id}', event)" title="删除分类">🗑️</div>
+                </summary>
+                <div class="folder-list">${symbolsHTML}</div>
+            `;
+            container.appendChild(detailsEl);
+        });
+
+        // 绑定拖拽
+        const mainS = new Sortable(container, { group: 'folders', animation: 150, handle: 'summary', ghostClass: 'sortable-ghost', onEnd: syncDataFromDOM });
+        sortableInstances.push(mainS);
+        document.querySelectorAll('.folder-list').forEach(list => {
+            const listS = new Sortable(list, { group: 'shared-watchlist', animation: 150, ghostClass: 'sortable-ghost', onEnd: syncDataFromDOM });
+            sortableInstances.push(listS);
+        });
+
+        updateFolderSums();
+        // 激活图片懒加载
+        setTimeout(() => { document.querySelectorAll('.async-coin-logo').forEach((img, i) => { setTimeout(() => { if(img.dataset.src){img.src=img.dataset.src; img.classList.remove('async-coin-logo');} }, i*50); }); }, 100);
+    }
+
+    // ================= 5. 分类与币种管理 =================
+    function addNewFolder() {
+        const name = prompt("请输入新分类名称:");
+        if (!name) return;
+        watchlistData.push({ id: `folder-${Date.now()}`, name: name, isOpen: true, symbols: [] });
+        saveWatchlistToStorage(); renderWatchlistDOM();
+    }
+    function removeFolder(folderId, event) {
+        event.preventDefault(); event.stopPropagation();
+        if (watchlistData.length <= 1) return alert("⚠️ 至少需要保留一个分类！");
+        if (confirm("确定要删除该分类及其包含的所有币种吗？")) {
+            watchlistData = watchlistData.filter(f => f.id !== folderId);
+            saveWatchlistToStorage(); renderWatchlistDOM();
+        }
+    }
+    function removeSymbolFromWl(symbol, btnEl) {
+        if(confirm(`确定移除 ${symbol} 吗？`)) { btnEl.closest('.wl-symbol-item').remove(); syncDataFromDOM(); }
+    }
+    function addSymbolToWl(symbol) {
+        for(let f of watchlistData) if(f.symbols.includes(symbol)) return alert(`${symbol} 已存在！`);
+        const lastFolder = watchlistData[watchlistData.length - 1];
+        lastFolder.symbols.push(symbol); lastFolder.isOpen = true;
+        saveWatchlistToStorage(); renderWatchlistDOM();
+        document.getElementById('filterInput').value = ''; document.getElementById('filter-ac-list').classList.remove('show');
+        syncWatchlistUtcOpens(); // 新加的币重新同步开盘价
+    }
+
+    // ================= 6. 搜索联想 =================
+    async function fetchSymbolsDict() {
+        try {
+            const res = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo').then(r => r.json());
+            allSymbolsCache = res.symbols.filter(s => s.contractType === 'PERPETUAL' && s.symbol.endsWith('USDT')).map(s => s.symbol);
+        } catch(e) { allSymbolsCache = ['BTCUSDT','ETHUSDT','SOLUSDT','DOGEUSDT','PEPEUSDT','ORDIUSDT']; }
+    }
+
+    function bindAutocomplete() {
+        const input = document.getElementById('filterInput'), list = document.getElementById('filter-ac-list');
+        input.addEventListener('input', function() {
+            const val = this.value.toUpperCase().trim(); list.innerHTML = '';
+            if (!val) { list.classList.remove('show'); return; }
+            const matches = allSymbolsCache.filter(s => s.includes(val)).slice(0, 10);
+            matches.forEach(sym => {
+                const div = document.createElement('div'); div.className = 'ac-item';
+                div.innerHTML = `<span>${sym.replace(new RegExp(val, "gi"), m => `<b>${m}</b>`)}</span> <span style="color:#848e9c">➕</span>`;
+                div.onclick = () => addSymbolToWl(sym); list.appendChild(div);
+            });
+            if(matches.length > 0) list.classList.add('show');
+        });
+        document.addEventListener('click', e => { if (e.target !== input && e.target !== list) list.classList.remove('show'); });
+    }
+
+    // ================= 7. 行情刷新核心 =================
+    async function syncWatchlistUtcOpens() {
+        let symbols = new Set();
+        watchlistData.forEach(f => f.symbols.forEach(s => symbols.add(s)));
+        const fetchTasks = Array.from(symbols).map(async (sym) => {
+            try {
+                const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=1d&limit=1`);
+                const klines = await res.json();
+                if (klines && klines.length > 0) trueUtcOpenCache[sym] = parseFloat(klines[0][1]);
+            } catch (e) {}
+        });
+        await Promise.all(fetchTasks);
+        triggerImmediateUpdate();
+    }
+
+    function updateFolderSums() {
+        if (!watchlistData) return;
+        watchlistData.forEach(folder => {
+            let sum = 0; let validCount = 0;
+            folder.symbols.forEach(sym => {
+                const t = globalTickerDict[sym];
+                if (t && typeof t.change === 'number' && !isNaN(t.change)) { sum += t.change; validCount++; }
+            });
+            const sumEl = document.getElementById(`sum-${folder.id}`);
+            if (sumEl) {
+                if (validCount === 0) { sumEl.className = 'folder-combo-sum text-muted'; sumEl.innerText = '组合: --'; }
+                else {
+                    const pStr = (sum > 0 ? '+' : '') + sum.toFixed(2) + '%';
+                    sumEl.className = `folder-combo-sum ${sum >= 0 ? 'text-up' : 'text-down'}`;
+                    sumEl.innerText = `组合: ${pStr}`;
+                }
+            }
+        });
+    }
+
+    async function triggerImmediateUpdate() {
+        try {
+            const data = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr').then(r => r.json());
+            if (!data || !Array.isArray(data)) return;
+
+            data.forEach(t => {
+                const sym = t.symbol; const c = parseFloat(t.lastPrice); const q = parseFloat(t.quoteVolume);
+                const open = trueUtcOpenCache[sym] || parseFloat(t.openPrice);
+                const manualChange = open ? ((c - open) / open) * 100 : 0;
+                globalTickerDict[sym] = { price: c, change: manualChange, vol: q };
+
+                const priceEls = document.getElementsByClassName(`live-price-${sym}`);
+                if (priceEls.length === 0) return;
+
+                const changeEls = document.getElementsByClassName(`live-change-${sym}`);
+                const volEls = document.getElementsByClassName(`live-vol-${sym}`);
+                const oldPrice = parseFloat(priceEls[0].innerText) || 0;
+                const colorClass = c > oldPrice ? 'flash-up' : (c < oldPrice ? 'flash-down' : '');
+
+                for (let i = 0; i < priceEls.length; i++) {
+                    priceEls[i].innerText = c < 1 ? c.toFixed(6) : (c < 10 ? c.toFixed(4) : c.toFixed(2));
+                    if (colorClass && oldPrice !== 0 && oldPrice !== c) {
+                        priceEls[i].classList.add(colorClass);
+                        setTimeout(() => priceEls[i].classList.remove(colorClass), 400);
+                    }
+                }
+
+                if (changeEls.length > 0) {
+                    const color = manualChange >= 0 ? 'text-up' : 'text-down';
+                    const pStr = (manualChange > 0 ? '+' : '') + manualChange.toFixed(2) + '%';
+                    for (let i = 0; i < changeEls.length; i++) {
+                        changeEls[i].innerText = pStr;
+                        changeEls[i].className = `col-change live-change-${sym} ${color}`;
+                    }
+                }
+                if (volEls.length > 0) {
+                    const vStr = formatVolCN(q);
+                    for (let i = 0; i < volEls.length; i++) volEls[i].innerText = vStr;
+                }
+            });
+            updateFolderSums();
+        } catch(e) {}
+    }
+
+    function startHTTPPolling() {
+        if (httpPollTimer) clearInterval(httpPollTimer);
+        triggerImmediateUpdate();
+        httpPollTimer = setInterval(triggerImmediateUpdate, 10000);
+    }
+
+    // ================= 8. 导入/导出备份 =================
+    function exportWatchlist() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(watchlistData, null, 2));
+        const a = document.createElement('a'); a.href = dataStr; a.download = `Jelly_Watchlist_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+    }
+    function importWatchlist() {
+        const input = document.createElement('input'); input.type = 'file'; input.accept = '.json';
+        input.onchange = e => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = event => {
+                try {
+                    const parsed = JSON.parse(event.target.result);
+                    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].hasOwnProperty('symbols')) {
+                        watchlistData = parsed; saveWatchlistToStorage(); renderWatchlistDOM(); syncWatchlistUtcOpens(); alert("✅ 恢复成功！");
+                    } else alert("❌ 格式不正确");
+                } catch (err) { alert("❌ 读取失败: 文件损坏"); }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+</script>
+</body>
+</html>
